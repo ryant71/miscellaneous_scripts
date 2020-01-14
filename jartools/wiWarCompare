@@ -1,0 +1,203 @@
+#!/usr/bin/env python
+
+import sys
+import hashlib
+import zipfile
+
+from lxml import etree
+from StringIO import StringIO
+
+def usage(progname='wiWarCompare'):
+    usage = (
+    'Usage: %s options\n'
+    ' Options:\n'
+    '   <war1> <war2>\n'
+    '   <war1> <war2> filepath\n'
+    '   <war1> <war2> filepath.jar filepath\n'
+    '')
+    print(usage % progname)
+    sys.exit()
+
+def is_file(filepath):
+    filename = filepath.split('/')[-1]
+    if not filename:
+        return None
+    else:
+        return filepath
+
+def is_config_filename(filepath):
+    filename = filepath.split('/')[-1]
+    if not filename:
+        return None
+    elif filename.find('.pom')>=0:
+        return filename
+    elif filename.find('.xml')>=0:
+        return filename
+    elif filename.find('.properties')>=0:
+        return filename
+    else:
+        return None
+
+def is_jar(filepath):
+    filename = filepath.split('/')[-1]
+    if filename.find('.jar')>=0:
+        return filename
+    else:
+        return None
+
+def get_common_file(filenames, filepaths, searchfile):
+    for filename in filenames:
+        if filename.find(searchfile)>=0:
+            #print(filename)
+            for filepath in filepaths:
+                if filepath.find(filename)>0:
+                    #print(filepath)
+                    return (filename, filepath)
+    return (None,None)
+
+
+def get_inner_zip(zipobject, filepath):
+    innerzip = StringIO(zipobject.read(filepath))
+    return zipfile.ZipFile(innerzip)
+
+def get_file_contents(zipobject, filepath):
+    try:
+        return zipobject.open(filepath).read()
+    except KeyError:
+        return None
+
+def get_sha1(filecontents):
+    return hashlib.sha1(filecontents).hexdigest()
+
+"""
+xml:
+hibernate-configuration session-factory property (name = connection.datasource)
+"""
+
+def get_connection_datasource(xmlstring):
+    xmlobject = etree.XML(xmlstring)
+    properties = xmlobject.xpath('//hibernate-configuration//session-factory//property')
+    for prop in properties:
+        if prop.attrib['name']=='connection.datasource':
+            return prop.text
+
+def get_jndi_name(xmlstring):
+    xmlobject = etree.XML(xmlstring)
+    try:
+        datasource = xmlobject.xpath('//glassfish-web-app//resource-ref//jndi-name')[0].text
+    except IndexError:
+        datasource = None
+    return datasource
+
+def get_context_root(xmlstring):
+    xmlobject = etree.XML(xmlstring)
+    try:
+        return xmlobject.xpath('//glassfish-web-app//context-root')[0].text
+    except IndexError:
+        return None
+
+if __name__=="__main__":
+
+    try:
+        zf1 = zipfile.ZipFile(sys.argv[1],'r')
+        zf2 = zipfile.ZipFile(sys.argv[2],'r')
+    except (IOError, IndexError):
+        usage()
+
+    try:
+        printfile = sys.argv[3]
+    except IndexError:
+        printfile = None
+
+    try:
+        deepfile = sys.argv[4]
+    except IndexError:
+        deepfile = None
+
+    filepaths1 = zf1.namelist()
+    filesonly1 = [is_file(filepath) for filepath in filepaths1 if is_file(filepath)]
+    configfilenames1 = [is_config_filename(filepath) for filepath in filepaths1 if is_config_filename(filepath)]
+    jarfiles1 = [is_jar(filepath) for filepath in filepaths1 if is_jar(filepath)]
+
+    filepaths2 = zf2.namelist()
+    filesonly2= [is_file(filepath) for filepath in filepaths2 if is_file(filepath)]
+    configfilenames2 = [is_config_filename(filepath) for filepath in filepaths2 if is_config_filename(filepath)]
+    jarfiles2 = [is_jar(filepath) for filepath in filepaths2 if is_jar(filepath)]
+
+    shadict1 = {}
+    for filepath in filesonly1:
+        sha1 = get_sha1(get_file_contents(zf1,filepath))
+        shadict1[filepath] = sha1
+
+    shadict2 = {}
+    for filepath in filesonly2:
+        sha1 = get_sha1(get_file_contents(zf2,filepath))
+        shadict2[filepath] = sha1
+
+    cfiles1 = shadict1.keys()
+    cfiles2 = shadict2.keys()
+
+    missing_from_1 = [f for f in cfiles2 if f not in cfiles1]
+    missing_from_2 = [f for f in cfiles1 if f not in cfiles2]
+
+    if printfile:
+        import difflib
+        if is_jar(printfile):
+            inner_zip_obj1 = get_inner_zip(zf1, printfile)
+            inner_zip_obj2 = get_inner_zip(zf2, printfile)
+            _filepaths1 = inner_zip_obj1.namelist()
+            _filepaths1 = [is_file(fp) for fp in _filepaths1 if is_file(fp)]
+            _filepaths2 = inner_zip_obj2.namelist()
+            _filepaths2 = [is_file(fp) for fp in _filepaths2 if is_file(fp)]
+            if deepfile:
+                df1 = get_file_contents(inner_zip_obj1,deepfile)
+                df2 = get_file_contents(inner_zip_obj2,deepfile)
+                df1_lines = df1.splitlines()
+                df2_lines = df2.splitlines()
+                d = difflib.Differ()
+                #diff = d.compare(df1, df2)
+                #print(''.join(diff))
+                diff = difflib.unified_diff(df1_lines, df2_lines, lineterm='')
+                print('\n'.join(list(diff)))
+            else:
+                print('%s:' % printfile)
+                for fp in _filepaths1:
+                    sha1_1 = get_sha1(get_file_contents(inner_zip_obj1, fp))
+                    try:
+                        sha1_2 = get_sha1(get_file_contents(inner_zip_obj2, fp))
+                    except:
+                        print('file %s not found' % fp)
+                    if sha1_1 != sha1_2:
+                        print('   %s differs' % fp)
+        else:
+            if1 = get_file_contents(zf1, printfile)
+            if1_lines = if1.splitlines()
+            if2 = get_file_contents(zf2, printfile)
+            if2_lines = if2.splitlines()
+            d = difflib.Differ()
+            #diff = d.compare(if1,if2)
+            #print(''.join(diff))
+            diff = difflib.unified_diff(if1_lines,if2_lines,lineterm='')
+            print('\n'.join(list(diff)))
+        sys.exit()
+
+    if missing_from_1:
+        print('%s is missing the following files:' % sys.argv[1])
+        for file in missing_from_1:
+            print('  %s' % file)
+
+    if missing_from_2:
+        print('%s is missing the following files:' % sys.argv[2])
+        for file in missing_from_2:
+            print('  %s' % file)
+
+
+    for cfile in cfiles1:
+        csha1 = shadict1[cfile]
+        try:
+            csha2 = shadict2[cfile]
+        except KeyError:
+            continue
+        if csha1!=csha2:
+            print('%s differs' % cfile)
+

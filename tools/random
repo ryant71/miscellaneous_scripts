@@ -1,0 +1,36 @@
+#!/usr/bin/python
+
+__author__ = 'ryant'
+__usage__ = """
+echo 1 2 3 | random
+random 1 2 3 
+ls | random
+random < something.txt
+"""
+
+import sys
+import string
+import random
+
+if len(sys.argv)<=1:
+    args = sys.stdin.readlines()
+    if type(args)==type([]):
+        if len(args)==1:
+            args = string.split(args[0])
+else:
+    args = sys.argv
+    args = args[1:]
+
+if not args:
+    sys.stderr.write('What are you passing me\n')
+    sys.stderr.flush()
+    sys.exit()
+
+args = [arg.strip() for arg in args]
+
+upper = len(args)
+select = random.randrange(0,upper)
+
+sys.stdout.write(args[select])
+sys.stdout.write('\n')
+sys.stdout.flush()

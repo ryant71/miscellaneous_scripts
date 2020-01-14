@@ -1,0 +1,67 @@
+---
+#
+# add admin users (idempotent actions)
+#
+- hosts: '{{host}}'
+  remote_user: root
+  become: yes
+  become_method: sudo
+  force_handlers: True
+
+  # users
+  #
+  vars:
+    users:
+      - username: ryant
+      - username: johnq
+      - username: joes
+      - username: evilk
+      - username: blarg
+      - username: fubarrella
+      - username: shinwhack
+
+  # tasks to run
+  #
+  tasks:
+
+    # only new users will get new passwords
+    - name: Add users
+      user:
+         name='{{item.username}}'
+         shell=/bin/bash
+         createhome=yes
+         comment=',,,,umask=0002'
+         groups=sudo,adm
+         append=yes
+         password='{{ "changethispassword" | password_hash("sha512")}}'
+         update_password=on_create
+      register: newuser
+      with_items: '{{users}}'
+
+    - debug:
+         var: newuser.results
+
+    # new users need to change the default password
+    - name: Set change password for new users
+      command: chage -d 0 '{{item.name}}'
+      with_items: "{{newuser.results}}"
+      when: item.changed == True
+
+    # this one breaks when key does not exist
+    - name: Add user ssh public key
+      authorized_key:
+        user: '{{item.username}}'
+        key: "{{ lookup('file', '../user_keys/{{item.username}}.pem.pub') }}"
+        manage_dir: yes
+      with_items: '{{users}}'
+      failed_when: False
+      ignore_errors: True
+
+    # disable certain user accounts.
+    # can be re-enabled with "passwd -u username"
+    - name: Lock generic users
+      shell: passwd -l '{{item}}'
+      with_items:
+          - wildfly
+          - glassfish
+

@@ -1,0 +1,29 @@
+---
+#
+# remove users
+#
+- hosts: '{{host}}'
+  remote_user: root
+  become: yes
+  become_method: sudo
+
+  # users
+  vars:
+    users:
+      - username: shinwhack
+      - username: nyetski
+      - username: eish
+
+  tasks:
+    - name: Remove Users
+      user:
+         name='{{item.username}}'
+         remove=yes
+         state=absent
+      register: removeduser
+      with_items: '{{users}}'
+
+    - debug:
+         var: removeduser
+
+

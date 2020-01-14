@@ -1,0 +1,328 @@
+#!/usr/bin/python
+
+# $Id: cronlaunch,v 1.3 2005/09/27 13:21:34 ryant Exp $
+
+
+import os
+import sys
+import time
+import string
+import popen2
+import socket
+import getopt
+
+try:
+    import rt_mail
+    thawte_mail = rt_mail
+except:
+    import thawte_mail
+
+#
+# get hostname
+#
+host = socket.gethostname()
+realhost = host
+
+#
+# helpful functions
+#
+def usage():
+    print 'usage: '+sys.argv[0]
+    print '    (-e|--email)'
+    print '    (-s|--sms)'
+    print '    (-v|--verbose)'
+    print '    (-d|--smsdomain)'
+    print '    (-h|--host)'
+    print '    ((-k|--lock) locktime)'
+    print '       <execfile>'
+    print ''
+    print '   Default sms domain is alerts.vine.co.za               '
+    print '   @thawte.com is added for --email and @<smsdomain>     '
+    print '    for --sms                                            '
+    print '   More than one address can be specified by separating  '
+    print '    the addresses with a comma, e.g., --email=bob,bill   '
+    print '    you can also force the host that appears in the sms  '
+    print '    to be something other than "hostname"                '
+    print '   If you use it, set the locktime to some reasonable    '
+    print '    level, like 3 times the maximum runtime of the       '
+    print '    script being launched.                               '
+
+#
+# Email notification
+#
+def notify(addr,subject,msg):
+    if type(addr)==type([]):
+        maillist = addr
+    else:
+        maillist = []
+        maillist.append(addr)
+    for addr in maillist:
+        m = thawte_mail.Message()
+        m.sender = 'alerts@thawte.com'
+        m.recipient = addr
+        m.subject = 'TECGAR01'
+        m.body = msg
+        m.send()
+
+
+def lock(lockfile):
+    try:
+        open(lockfile,'w').write(str(time.time()))
+    except:
+        sys.stderr.write('Cannot lock\n')
+        return 0
+    if verbose:
+        sys.stdout.write('locked\n')
+    return 1
+
+
+def unlock(lockfile,reason=''):
+    if reason:
+        sys.stderr.write(reason+'\n')
+    try:
+        os.unlink(lockfile)
+    except:
+        if verbose:
+            sys.stdout.write('Cannot unlink '+lockfile+': '+str(sys.exc_value))
+        return 0
+    if verbose:
+        sys.stdout.write('unlocked\n')
+    return 1
+
+
+#
+# get the user
+#
+keys = ['USER','USERNAME','LOGNAME']
+user = 'unknown'
+for key in keys:
+    if os.environ.has_key(key):
+        user = os.environ[key]
+        break
+
+#
+# declarations, etc
+#
+test = False
+verbose = False
+log = False
+locktime = 0
+sms_rcpts = ''
+email_rcpts = ''
+smsdomain = ''
+scream = 0
+
+#
+# getopt stuff
+#
+try:
+    args = sys.argv[1:]
+except:
+    usage()
+    sys.exit(2)
+
+if len(args)==0:
+    usage()
+    sys.exit(0)
+
+# get the options and argument(s)
+#
+opts, theargs = getopt.getopt(args,'e:s:d:k:vtl', \
+    ['email=','sms=','smsdomain=','locktime=','verbose','test','log'])
+
+
+# the opts
+#
+for par, val in opts:
+    if par in ('-t', '--test'):
+        test = True
+    if par in ('-v', '--verbose'):
+        verbose = True
+    if par in ('-s', '--sms'):
+        sms_rcpts=val
+    if par in ('-e', '--email'):
+        email_rcpts=val
+    if par in ('-d','--smsdomain'):
+        smsdomain=val
+    if par in ('-l','--log'):
+        log = True
+    if par in ('-h', '--host'):
+        realhost = host
+        host = val
+    if par in ('-k','--locktime'):
+        locktime = int(val)
+
+# theargs
+#
+script = string.join(theargs)
+basename = script.split('/')[-1]
+logname = basename.split()[0]
+lockfile = '/tmp/cronlaunch-lockfile.'+logname
+if verbose:
+    print 'script: '+script
+    print 'basename: '+basename
+    print 'lockfile: '+lockfile
+    print 'locktime: '+str(locktime)
+# get the sms domain
+#
+if not smsdomain:
+    smsdomain = 'alerts.vine.co.za'
+
+
+# default the sms addresses
+#
+if sms_rcpts:
+    sms_rcpts = string.split(sms_rcpts, ',')
+    tmp = []
+    for item in sms_rcpts:
+        if string.find(item, '@')==-1:
+            item = item+'@'+smsdomain
+        tmp.append(item)
+    sms_rcpts = tmp
+
+# default the email addresses
+#
+if email_rcpts:
+    email_rcpts = string.split(email_rcpts, ',')
+    tmp = []
+    for item in email_rcpts:
+        if string.find(item, '@')==-1:
+            item = item+'@thawte.com'
+        tmp.append(item)
+    email_rcpts = tmp
+
+# build the notify list
+#
+stderrlist = []
+if sms_rcpts:
+    stderrlist = stderrlist + sms_rcpts
+if email_rcpts:
+    stderrlist =  stderrlist + email_rcpts
+
+if locktime:
+    if os.path.isfile(lockfile):
+        lockfiletime = float(open(lockfile,'r').readline().strip())
+        diff = time.time() - lockfiletime
+        if verbose:
+            print 'locktime: '+str(locktime)
+            print 'lockfiletime '+str(lockfiletime)
+            print 'lockfile diff: '+str(diff)
+        if diff >= locktime:
+            unlock(lockfile, 'lockfile is '+str(diff)+' seconds old, removing\n')
+        else:
+            sys.stdout.write('lockfile in place, exiting...\n')
+            sys.exit(20)
+    else:
+        if verbose:
+            print 'no lockfile exists'
+
+#
+# run the argument (script)
+#
+now = time.time()
+localtime = time.localtime()
+thedate = time.strftime('%Y.%m',localtime)
+thetime = time.strftime('%d/%m %T', localtime)
+filetime = time.strftime('%d-%m', localtime)
+
+stdout = ''
+stderr = ''
+start = time.time()
+
+if locktime:
+    if verbose:
+        sys.stdout.write('locking with '+lockfile+'\n')
+    lock(lockfile)
+
+if test:
+    print 'Start popen2.popen3('+script+')'
+
+if verbose:
+    print 'running '+script
+
+r,w,e = popen2.popen3(script)
+
+if test:
+    print 'popen2.popen3('+script+') done'
+
+try:
+    stdout = r.readlines()
+except:
+    stdout = ''
+
+r.close()
+stdout = string.join(stdout)
+
+if test:
+    print 'r.readlines() complete'
+
+try:
+    stderr = e.readlines()
+except:
+    stderr = ''
+e.close()
+stderr = string.join(stderr)
+
+unlock(lockfile)
+
+if test:
+    print 'e.readlines() complete'
+
+end = time.time()
+ttime = end - start
+
+if stdout and verbose:  # pass stdout through to cron (...and bugs@thawte.com)
+    print stdout
+
+if test:
+    print 'Going to email: '
+    for item in email_rcpts:
+        print item
+    print 'Going to sms: '
+    for item in sms_rcpts:
+        print item
+    print 'Script: '+script
+    print 'Basename: '+basename
+    print 'STDOUT:'
+    print stdout
+    print 'STDERR:'
+    print stderr
+
+    notify(stderrlist,'','TEST: cronlauch on '+host)
+
+blecch = thetime+' '+script+' '+str(ttime)+'\n'
+
+def log(file, txt):
+    homedir = os.environ['HOME']
+    if not os.path.isdir(homedir+'/cronlog/'):
+        os.mkdir(homedir+'/cronlog/')
+    f = open(homedir+'/cronlog/'+file,'a+')
+    f.write(txt)
+    f.close()
+
+try:
+    file = logname+'-'+thedate+'.log'
+    log(file, blecch)
+except:
+    print '** Could not log(\''+file+'\',\''+blecch+'\') **'
+    print stderr
+
+if stderr:
+    try:
+        stderr = user+'@'+host+'['+basename+']: '+stderr
+        notify(stderrlist,'', stderr)
+    except:
+        print '** Could not send notification **'
+        print 'Type: '+str(sys.exc_type)+', Value: '+str(sys.exc_value)
+        print stderr
+
+
+if log:
+    try:
+        file = logname+'-'+thedate+'.stderr'
+        log(file, stderr)
+    except:
+        print '** Could not log(\''+file+'\',\''+stderr+'\') **'
+        print stderr
+
+

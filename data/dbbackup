@@ -1,0 +1,128 @@
+#!/bin/sh
+
+#  $Id: dbbackup,v 1.1 2005/12/07 11:45:09 ryant Exp $
+
+
+#######################################################################
+# Author: Ryan Tracey
+# Purpose: Database backup
+# Date: 07/12/2002
+#######################################################################
+
+DELETEOLDERTHAN=7
+THEDATE=`date +%Y.%m.%d`
+BAKDIR=/var/backups/db/periodic
+BAKDAYS=1
+TMPFILE=/tmp/${RANDOM}.txt
+rm -rf ${TMPFILE}
+THISHOST=`hostname`
+if [ "$THISHOST" = "chewbacca" ]; then
+	OFFSITE="Y"
+	ADMINHOST=""
+	# set hold=1 so that harvey knows to wait.
+	/usr/local/sbin/database_acl hold
+elif [ "$THISHOST" = "app2" ]; then
+	OFFSITE="N"
+	ADMINHOST="houston"
+else
+	echo 'Huh'
+	exit 55
+fi
+
+# if no arguments then use the default ones
+if [ $# -eq 0 ]; then
+	set merlin server_cert personal entities finance account rates mkting archive
+fi
+
+# we need a backup dir
+if [ ! -d ${BAKDIR} ]; then
+	mkdir -p ${BAKDIR}  
+fi
+
+# make some space
+cd ${BAKDIR}
+rm -r `date --date="${BAKDAYS} days ago" +%Y.%m.%d`
+
+# subdir in backup dir
+if [ ! -d ${THEDATE} ]; then
+	mkdir ${THEDATE}
+fi
+cd ${THEDATE} 
+
+# don't want to do anything if there are already files there
+if [ `ls | wc -l` -ne 0 ]; then
+	echo "already files in ${BAKDIR}/${THEDATE}"; ls; exit 65
+fi
+
+# start working...
+/usr/local/sbin/database_acl stop
+for db in $@; do
+	cd ${BAKDIR}/${THEDATE}
+	echo -ne "\n\n-->${db}:" >> ${TMPFILE}
+	tables=`mysql -B -s -e "show tables" ${db}`		# list of tables 
+	if [ `echo $tables | wc -w` -eq 0 ]; then		# if there are now tables
+		echo "zero tables for ${db}"				# just so we know
+	else
+		mkdir ${db} 
+		cd ${db}
+		if [ `pwd` = ${BAKDIR}/${THEDATE}/${db} ]; then 
+			for table in ${tables}; do
+				mysqldump ${db} ${table} > ${db}-${table}.sql || echo "mysqldump ${db} ${table} failed" 
+				grepcount=`grep INSERT ${db}-${table}.sql | wc -l | sed -e 's/[ 	]//g'`
+				mysqlcount=`mysql -B -s -e "select count(*) from ${table}" ${db}`
+				echo -ne "\n\t- ${table} (filerows: ${grepcount}) (dbrows: ${mysqlcount})" >> ${TMPFILE}
+			done
+		else
+			echo "where the hell am I?" ; exit 65	# don't want to dump the db just anywhere
+		fi
+		echo "${db} okay!"
+	fi
+done
+/usr/local/sbin/database_acl start
+
+# set hold=0 so that harvey knows it is okay to connect
+
+if [ "$THISHOST" = "chewbacca" ]; then
+    /usr/local/sbin/database_acl release
+fi
+
+cd ${BAKDIR}
+mv ${TMPFILE} ${THEDATE}/report.txt
+tar zcf databases-bak-${THEDATE}.tgz ${THEDATE} 
+
+if [ `tar ztf databases-bak-${THEDATE}.tgz 1>/dev/null 2>&1` ]; then
+	echo "Aaarrggghh! Gads man, the archive is broken" ; exit 75
+else
+	echo 'tar file looks okay'
+	mv databases-bak-${THEDATE}.tgz ${THEDATE}
+
+	if [ "${THISHOST}" = "chewbacca" ]; then
+		:
+		#date +%Y.%m.%d > /var/web/webspace/prodis/download-big.txt
+	else
+		# set the secure_db-rotate ball rolling
+		ssh -l www-data ${ADMINHOST} /usr/local/sbin/mkproddate big
+	fi
+
+
+	if [ "${OFFSITE}" = "Y" ]; then
+		# encrypt the archive
+		gpg --encrypt --recipient "Ryan Tracey (root@tsunami) <ryant@thawte.com>" --recipient Francois --always-trust ${THEDATE}/databases-bak-${THEDATE}.tgz
+		# mv it
+		scp -q ${THEDATE}/databases-bak-${THEDATE}.tgz.gpg yoda:/mnt/prodbackup/proddb/
+
+		old_files=$(ssh yoda "find /mnt/prodbackup/proddb/ -type f -mtime +${DELETEOLDERTHAN} -name databases-bak-\*.tgz.gpg")
+		# make some space...
+		for file in ${old_files}; do
+			dom=`echo ${file} | awk -F. '{print $(NF-2)}'`
+			if [ "${dom}" = "01" -o "${dom}" = "15" ]; then
+				echo "not deleting ${file}" # save backups from 01 and 15 of each month
+			else
+				echo "deleting ${file}"     # delete the rest
+				ssh yoda "rm -f ${file}" 
+			fi
+		done
+	fi
+fi
+
+

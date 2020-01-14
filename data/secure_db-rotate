@@ -1,0 +1,319 @@
+#!/usr/bin/python
+
+#  $Id: secure_db-rotate,v 1.1 2005/03/15 15:12:29 ryant Exp $
+
+
+import string
+import time
+import sys
+import os
+import re
+import MySQL
+
+import priority
+
+# make sure secure_db-rotate is not already running
+#
+def killme(proc):
+	thispid = os.getpid()
+	lines = os.popen('/bin/ps auxw').readlines() # use 'ps auxw', 'w' = 'wrap'
+	processes = []
+	for line in lines:
+		if string.find(line, proc) != -1:
+			processes.append(string.atoi(string.split(line)[1]))
+	for pid in processes:
+		if pid<>thispid:
+			print '...killing '+str(pid)+' with SIGTERM'
+			print os.kill(pid, 15)
+		else:
+			print '...SIGTERM ignoring \'this\' pid '+str(pid)
+	time.sleep(2)
+	for pid in processes:
+		if pid<>thispid:
+			try: 
+				print os.kill(pid, 9)
+				print '...killing '+str(pid)+' with SIGKILL'
+			except: 
+				print '...not killing '+str(pid)+' with SIGKILL'
+		else:
+			print '...SIGKILL ignoring \'this\' pid '+str(pid)
+
+
+thisfile = string.split(sys.argv[0], '/')[-1]
+print thisfile
+killme(thisfile)
+
+# look at /var/www/lib/
+#
+import pr_database
+
+host = 'yoda.cpt.thawte.com'
+thedate = time.strftime("%Y.%m.%d", time.localtime(time.time()))
+day = time.strftime('%a', time.gmtime(time.time()))
+
+def fail(subject,msg):
+	import thawte_mail
+	email = thawte_mail.Message()
+	email.sender = 'dba@dataview.cpt.thawte.com'
+	email.recipient = '0824475069@voda.co.za'
+	email.subject = subject
+	email.cc = ['ilseb@thawte.com','nicolea@thawte.com']
+	email.setBody(msg)
+	email.send()
+
+
+def rmDir(path):
+	try: os.chdir(path)
+	except: return 1
+	filelist = os.listdir('.')
+	for file in filelist:
+		os.unlink(file)
+	os.rmdir(path)
+
+def getDLStatus():
+	adminhost = 'yoda.cpt.thawte.com'
+	data = os.popen('/usr/bin/curl --silent http://'+adminhost+'/prodis/download-big.txt').read()
+	data = string.strip(data)
+	if data==thedate:
+		return 1
+	else:
+		return 0
+
+Err = 'Could not clean'
+
+def mySQLCleanTables(priority):
+	dvComment(priority, 'Cleaning tables of passwords, etc')
+	if priority=='high':
+		db_account = MySQL.connect()
+		db_account.selectdb('account')
+		try: db_account["update vps_transaction set cc_number='0'"]
+		except: print 'Could not clean account.vps_transaction.cc_number'
+		try: db_account["update vps_transaction set echeque_micrnum='0'"]
+		except: print 'Could not clean account.vps_transaction.echecque_micrnum'
+	db_ent = MySQL.connect()
+	db_ent.selectdb('entities')
+	if priority=='high':
+		try: db_ent["UPDATE isp SET password='xxxxxxxx'"]
+		except: print 'Could not clean entities.isp.password'
+	if priority=='low':
+		try: db_ent["update settings set value = 'XXXX' where name='vps_pfpro_live_user'"]
+		except: print Err, 'entities.settings.vps_pfpro_live_user' 
+		try: db_ent["update settings set value = 'XXXX' where name='vps_pfpro_live_password'"]
+		except: print Err, 'entities.settings.vps_pfpro_live_password'
+		try: db_ent["update settings set value='FALSE' where name='vps_use_LIVE_server'"]
+		except: print Err, 'entities.settings.vps_use_LIVE_server'
+		try: db_ent["update settings set value='TRUE' where name='developer-mode'"]
+		except: print Err, 'entities.settings.developer-mode'
+		try: db_ent["UPDATE ticket SET passwrd='xxxxxxxx'"]
+		except: print Err, 'entities.ticket.passwrd'
+		for i in ['nicolea', 'ilseb', 'riank']:
+			db_ent["INSERT INTO role VALUES ('"+i+"', 'dbadmin', '1')"]
+			db_ent["INSERT INTO role VALUES ('"+i+"', 'fin_statmnt', '1')"]
+		# insert superuser
+		#
+		try: roles = db_ent["select distinct(role) from role"]
+		except: roles = []
+		for item in range(0,len(roles)):
+			roles[item] = roles[item][0]
+		for item in roles:
+			try: db_ent["insert into role values ('superuser','"+item+"', '1')"]
+			except: print "failure to create superuser permission"
+		try: db_ent["insert into person values ('superuser','Super User','Cape Town',0,'jasonb@thawte.com')"]
+		except: print "failure to create superuser"
+	if priority=='medium':
+		db_fin = MySQL.connect()
+		db_fin.selectdb('finance')
+		try: db_fin["UPDATE creditcard SET number='0000000000000000'"]
+		except: print Err, 'finance.creditcard.number'
+		try: db_fin["UPDATE creditcard SET expiry=00000000.0000"]
+		except: print Err, 'finance.creditcard.expiry'
+	db_pers = MySQL.connect()
+	db_pers.selectdb('personal')
+	if priority=='high':
+		try: db_pers["UPDATE entrequest SET password='xxxxxxxx'"]
+		except: print Err, 'personal.entrequest.password'
+	if priority=='medium':
+		try: db_pers["UPDATE person SET challenge='xxxxxxxx'"]
+		except: print Err, 'personal.person.challenge'
+		try: db_pers["UPDATE autorespondercsr SET challenge='xxxxxxx'"]
+		except: print Err, 'personal.autorespondercsr.challenge'
+		try: db_pers["UPDATE certificate SET challenge='xxxxxxxx'"]
+		except: print Err, 'personal.certificate.challenge'
+		try: db_pers["UPDATE transaction SET ccnumber='xxxxxxxxxxxxxxxx'"]
+		except: print Err, 'personal.transaction.ccnumber'
+	db_serv = MySQL.connect()
+	db_serv.selectdb('server_cert')
+	if priority=='high':
+		try: db_serv["UPDATE csr_details SET passwd='xxxxxxx'"]
+		except: print Err, 'server_cert.csr_details.passwd'
+	if priority=='low':
+		try: db_serv["UPDATE pay_stronghold SET passwd='xxxxxxxx'"]
+		except: print Err, 'server_cert.pay_stronghold.passwd'
+		try: db_serv["UPDATE ccreturns SET ccnum='0000000000000000'"]
+		except: print Err, 'server_cert.ccreturns.ccnum'
+		try: db_serv["UPDATE pay_worldpay SET ccnumber='0000000000000000'"]
+		except: print Err, 'server_cert.pay_worldpay.ccnumber'
+		try: db_serv["UPDATE pay_creditcard SET number='0000000000000000'"]
+	 	except: print Err, 'server_cert.pay_creditcard.number'
+
+def dvComment(priority, comment):
+	try: db_dv["insert into dvstatus values ('"+priority+"', '"+comment+"', '"+str(time.time())+"', '"+thedate+"')"]
+	except: pass
+
+def dvUncomment(priority, comment):
+	db_dv["delete from dvstatus where script='"+priority+"' and comment='"+comment+"' and today='"+today+"'"]
+
+db_dv = MySQL.connect('yoda','www-data','')
+db_dv.selectdb('sysadmin')                 
+
+###### new stuff 2002/12/17 ################
+
+backuppath = '/var/backups/db/periodic/'+thedate
+remotepath = backuppath
+try: os.mkdir(backuppath)
+except: pass
+
+def mkRemoteFileDict():
+	try: 
+		remotefiledict = {}
+		remotefiledict['merlin-list'] = os.popen('ssh yoda ls '+remotepath+'/merlin/').readlines()
+		remotefiledict['server_cert-list'] = os.popen('ssh yoda ls '+remotepath+'/server_cert/').readlines()
+		remotefiledict['account-list'] = os.popen('ssh yoda ls '+remotepath+'/account/').readlines()
+		remotefiledict['entities-list'] = os.popen('ssh yoda ls '+remotepath+'/entities/').readlines()
+		remotefiledict['personal-list'] = os.popen('ssh yoda ls '+remotepath+'/personal/').readlines()
+		remotefiledict['finance-list'] = os.popen('ssh yoda ls '+remotepath+'/finance/').readlines()
+		remotefiledict['rates-list'] = os.popen('ssh yoda ls '+remotepath+'/rates/').readlines()
+		remotefiledict['mkting-list'] = os.popen('ssh yoda ls '+remotepath+'/mkting/').readlines()
+		#remotefiledict['archive-list'] = os.popen('ssh yoda ls '+remotepath+'/archive/').readlines()
+	except:
+		return 0
+	return remotefiledict
+
+
+def scpFile(pri, database, table):
+	dvComment(pri, 'downloading '+database+'.'+table+'.') 
+	cmd = 'scp -C '+host+':'+remotepath+'/'+database+'/'+database+'-'+table+'.sql '+backuppath+'/'
+	print cmd
+	os.popen(cmd).read()  
+	#dvUncomment(pri, 'downloading '+database+'.'+table+'.')
+
+def secDelTable(database, table):
+	db = MySQL.connect()
+	db.selectdb(database)
+	try: 
+		g = db["drop table "+str(table)]
+	except:
+		try: g = db["desc "+str(table)]
+		except: return 1
+		return 0
+	return 1
+
+def secInsertData(database, table):
+	re_INSERT = re.compile('^-')
+	file = backuppath+'/'+database+'-'+table+'.sql'
+	db = MySQL.connect()
+	db.selectdb(database)
+	blob = open(file).readlines()
+	for line in blob:
+		if re_INSERT.match(line)>=0:
+			line = line[:-1]
+			db[line]
+
+def secMySQLInsert(database,table):
+	if table=='csr_details':
+		try:
+			file = open(backuppath+'/'+database+'-'+table+'.sql').read()
+			plc = string.find(file,';')
+			tbl = file[:plc+1]
+			inserts = file[plc+1:]
+			tbl = string.replace(tbl,'  KEY enterprise (enterprise),\012','')
+			tbl = string.replace(tbl,'  KEY isp (isp)\012','')
+			tbl = string.replace(tbl,'reissue),','reissue)')
+			txt = tbl + inserts
+			open(backuppath+'/'+database+'-'+table+'.sql','w').write(txt)
+		except:
+			print '**********************************************'
+			print '** Something went wrong fudging csr_details **'
+			print '**********************************************'
+	start = time.time()
+	try: os.popen('mysql '+database+' < '+backuppath+'/'+database+'-'+table+'.sql').read()
+	except: print '** Could not mysql '+database+' < '+backuppath+'/'+database+'-'+table+'.sql **'
+	end = time.time()
+	tt2 = end - start
+	print str(tt2)+' seconds to restore from file'
+
+
+
+#
+# wait until backup script is finished!
+#
+while 1:
+	if getDLStatus():
+		break
+	else:
+		dvComment('none', 'Backup not finished, going around again')
+		time.sleep(300) 
+
+
+remotefiledict = mkRemoteFileDict()
+if not remotefiledict:
+	dvComment('SSH PROBLEM', 'remotefiledict is 0')
+	fail('SSH PROBLEM', 'remotefiledict is 0')
+
+maindict = priority.maindict
+
+#
+# now we start...
+#
+for pri in ['high', 'medium', 'low']:
+	for key in remotefiledict.keys():
+		db = string.split(key, '-')[0]
+		for file in remotefiledict[key]:
+			table = string.split(string.split(file, '-')[1], '.')[0]
+			if table in maindict[pri][db]:
+				if not os.path.isfile(backuppath+'/'+db+'-'+table+'.sql'):
+					cnt = 5
+					while cnt>=0:
+						try: 
+							scpFile(pri, db, table)
+							cnt = -1
+						except: dvComment(pri, '[fail] scp failure: '+db+'-'+table+'.sql !')
+						cnt = cnt - 1
+					if cnt==0: fail('dataview','scp failure: '+db+'-'+table+'.sql') 
+				if secDelTable(db,table):
+					pass
+				else:
+					print '[fail] failure dropping '+db+'.'+table+'!'
+					dvComment(pri, '[fail] failure dropping '+db+'.'+table+'!')
+				try: secMySQLInsert(db,table) 
+				except:
+					print '[fail] failure inserting '+db+'-'+table+'.sql !' 
+					dvComment(pri, '[fail] failure inserting '+db+'-'+table+'.sql !')
+				maindict[pri][db].remove(table)
+				#remotefiledict[key].remove(db+'-'+table+'.sql\012')
+				print 'did '+pri+' '+db+' '+table+'\n'
+	try: mySQLCleanTables(pri)
+	except: dvComment(pri, 'failure cleaning table')
+	dvComment(pri, 'FINISHED')
+
+print 'remotefiledict: '+str(remotefiledict)
+print 'maindict: '+str(maindict)
+
+#
+#for key in remotefiledict.keys():
+#	if len(remotefiledict[key])>0:
+#		for file in remotefiledict[key]:
+#			table = string.split(string.split(file, '-')[1], '.')[0]
+#			db = string.split(key, '-')[0]
+#			if not os.path.isfile(backuppath+'/'+db+'-'+table+'.sql'):
+#				try: scpFile(db, table)
+#				except: dvComment(pri, 'scp failure: '+db+'-'+table+'.sql !')
+#			try: secDelTable(db,table)
+#			except: pass
+#			try:
+#				secMySQLInsert(db,table)
+#						
+
+############################################
+
+print 'Finished! -- '+str(time.strftime("%T", time.localtime(time.time())))

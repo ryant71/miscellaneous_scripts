@@ -1,0 +1,53 @@
+---
+#
+# ansible-playbook -i ../hosts.ini -e "host=mysql-lxd" add_user_mq.yml
+#
+- hosts: '{{host}}'
+  remote_user: root
+  become: yes
+  become_method: sudo
+
+  # users
+  vars:
+    users:
+      - username: hoekomgroup
+      - username: mqm
+
+  tasks:
+    - name: Add users
+      user:
+         name={{item.username}}
+         shell=/bin/bash
+         createhome=yes
+         comment=',,,,umask=0002'
+         groups=users
+         append=yes
+         password: '{{randpass}}'
+         update_password: always
+      with_items: '{{users}}'
+
+    - name:
+      file:
+         path='{{item}}'
+         state=directory
+         owner=mqm
+         group=users
+         mode=0775
+      with_items:
+        - /usr/hoekomgroup/winkel_file_extracts
+        - /usr/hoekomgroup/winkel_file_extracts/campaigns
+        - /usr/hoekomgroup/winkel_file_extracts/campaigns/campaignitem
+        - /usr/hoekomgroup/winkel_file_extracts/campaigns/campaigndata
+        - /usr/hoekomgroup/winkel_file_extracts/campaigns/campaignbranch
+        - /usr/hoekomgroup/winkel_file_extracts/product
+        - /usr/hoekomgroup/winkel_file_extracts/voucher
+        - /usr/hoekomgroup/winkel_file_extracts/wallet
+
+      file:
+         path=/usr/hoekomgroup/winkel_file_extracts/temp
+         state=directory
+         owner=mqm
+         group=mqm
+         mode=0775
+
+

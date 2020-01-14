@@ -1,0 +1,21 @@
+---
+#
+# remove user -e "username=bob"
+#
+- hosts: '{{host}}'
+  remote_user: root
+  become: yes
+  become_method: sudo
+
+  tasks:
+    - name: Remove Users
+      user:
+         name='{{username}}'
+         remove=yes
+         state=absent
+      register: removeduser
+
+    - debug:
+         var: removeduser
+
+

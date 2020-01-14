@@ -1,0 +1,26 @@
+
+services:
+    external.xyz_customer-tst:
+        graphite_location: xyz
+        url: https://xyz.co.za/CustomerEntity.1.0/Customer.svc
+        user: svc_foo
+        password: kjghkjhkj
+        post_data: |
+            <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:cus="http://fosltd/customer/1.0/customer">
+             <soapenv:Header/>
+             <soapenv:Body>
+              <cus:Verify/>
+             </soapenv:Body>
+            </soapenv:Envelope>
+        succ_resp: |
+            <s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">
+             <s:Body>
+              <VerifyResponse xmlns="http://fosltd/customer/1.0/customer">
+               <VerifyResult>OK</VerifyResult>
+              </VerifyResponse>
+             </s:Body>
+            </s:Envelope>
+    pos_somegateway_gw:
+        graphite_location: gateway
+        url: http://n.n.n.n/some.svc?wsdl
+
