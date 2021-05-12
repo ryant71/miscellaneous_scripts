@@ -12,7 +12,7 @@ MAXIMUM_HEART_RATE = 208 - (0.7 * AGE)
 
 import sys
 
-AGE = 48
+AGE = 49
 # tanaka equation
 MAXIMUM_HEART_RATE = 208 - (0.7 * AGE)
 
@@ -50,6 +50,6 @@ if __name__ == "__main__":
     try:
         resting_heart_rate = int(sys.argv[1])
     except IndexError:
-        resting_heart_rate = 46
+        resting_heart_rate = 48
 
     main(resting_heart_rate)
