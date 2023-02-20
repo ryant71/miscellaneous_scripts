@@ -27,17 +27,23 @@ MAXIMUM_HEART_RATE = 208 - (0.7 * AGE)
 import sys
 from math import log10
 
-weight = 105
-height = 185
-age = 49
-body_fat_percentage = 15
-waist = 108
-neck = 47
-hip = 0
+HEIGHT = 185
+AGE = 51
+WAIST = 108
+NECK = 47
+HIP = 0
 
-AGE = 49
+AGE = 51
+
 # tanaka equation
 MAXIMUM_HEART_RATE = 208 - (0.7 * AGE)
+
+# as reported by garmin watch
+RESTING_HEART_RATE = 49
+
+# putting this here, but this will be calculated in karvonen function
+HEART_RATE_RESERVE = MAXIMUM_HEART_RATE - RESTING_HEART_RATE
+
 
 ZONE_DICT = {
     'Zone 0': (0.4, 0.5, 'Easy'),
@@ -54,6 +60,9 @@ def float_to_percent(lower, upper):
 
 
 def karvonen(zone, resting_heart_rate):
+    """
+    Karvonen equation for calculating heart-rate zones
+    """
     lower, upper, text = ZONE_DICT[zone]
     percent_range = float_to_percent(lower, upper)
     lower = int(((MAXIMUM_HEART_RATE - resting_heart_rate) * lower) + resting_heart_rate)
@@ -67,64 +76,83 @@ def us_navy_body_fat_calc():
         Men: BF = 495 / ( 1.0324 - 0.19077 * log10( waist - neck ) + 0.15456 * log10( height ) ) - 450
         Women: BF = 495 / ( 1.29579 - 0.35004 * log10( waist + hip - neck ) + 0.22100 * log10( height ) ) - 450
     """
-    return 495 / ( 1.0324 - 0.19077 * log10( waist - neck ) + 0.15456 * log10( height ) ) - 450
+    return 495 / ( 1.0324 - 0.19077 * log10( WAIST - NECK ) + 0.15456 * log10( HEIGHT ) ) - 450
 
 
-def lean_body_mass():
+def lean_body_mass(weight):
     return weight * (100 - us_navy_body_fat_calc()) / 100
 
 
-def lean_body_mass_boer_formula_estimate():
+def boer_formula_lean_body_mass_estimate(weight):
     """
     Lean Body Mass Boer Formula:
     (For when you don't know your body fat %)
         Men:    LBM = 0.407 * weight [kg] + 0.267 * height [cm] - 19.2
         Women:  LBM = 0.252 * weight [kg] + 0.473 * height [cm] - 48.3
     """
-    return 0.407 * weight + 0.267 * height - 19.2
+    return 0.407 * weight + 0.267 * HEIGHT - 19.2
 
 
-def mifflin_st_jeor():
+def mifflin_st_jeor_lean_basal_metabolic_rate(weight):
     """
+    The Mifflin-St. Jeor calculator (or equation) calculates your 
+    basal metabolic rate (BMR), and its results are based on an 
+    estimated average. Basal metabolic rate is the amount of energy expended
+    per day at rest (how many calories you would burn on bed rest).
+
     Mifflin-St Jeor Equation:
         Men:    BMR = 10 * W + 6.25 * H - 5 * A + 5
         Women:  BMR = 10 * W + 6.25 * H - 5 * A - 161
     """
-    return 10 * weight + 6.25 * height - 5 * age + 5
+    return 10 * weight + 6.25 * HEIGHT - 5 * AGE + 5
 
 
-def revised_harris_benedict():
+def revised_harris_benedict_lean_basal_metabolic_rate(weight):
     """
+    Basal metabolic rate (BMR), and its results are based on an 
+    estimated average. Basal metabolic rate is the amount of energy expended
+    per day at rest (how many calories you would burn on bed rest).
+
+
     Revised Harris-Benedict Equation:
         Men:    BMR = 13.397 * W + 4.799 * H - 5.677 * A + 88.362
         Women:  BMR = 9.247 * W + 3.098 * H - 4.330 * A + 447.593
     """
-    return 13.397 * weight + 4.799 * height - 5.677 * age + 88.362
+    return 13.397 * weight + 4.799 * HEIGHT - 5.677 * AGE + 88.362
 
 
-def katch_mcardle(lbm):
+def katch_mcardle_lean_basal_metabolic_rate(lbm):
     """
+    Basal metabolic rate (BMR), and its results are based on an 
+    estimated average. Basal metabolic rate is the amount of energy expended
+    per day at rest (how many calories you would burn on bed rest).
+
     Katch-McArdle Equation:
-        First calculate LBM with lean_body_mass_boer_formula_estimate()
+        First calculate LBM with boer_formula_lean_body_mass_estimate()
         BMR = 370 + (21.6 * LBM)
     """
     return 370 + (21.6 * lbm)
 
 
-def body():
-    lbm_est = lean_body_mass_boer_formula_estimate()
-    lbm_boer = lean_body_mass()
-    print(f'lbm_est: {lbm_est}\nlbm_boer: {lbm_boer}')
+def body(weight):
+    lbm_boer = boer_formula_lean_body_mass_estimate(weight)
+    lbm_est = lean_body_mass(weight)
     bfp = us_navy_body_fat_calc()
-    print(f'body fat: {bfp}\n')
-    msj = mifflin_st_jeor()
-    rhb = revised_harris_benedict()
-    kma = katch_mcardle(lbm_boer)
-
-    print(f'msj: {msj}\nrhb: {rhb}\nkma: {kma}\n')
+    print('\nBody Weight:')
+    print(f'USN body fat estimation: {bfp}')
+    print(f'Lean Body Mass Estimate (Standard Method): {lbm_est}')
+    print(f'Lean Body Mass Estimate (Boer Method): {lbm_boer}')
+    msj = mifflin_st_jeor_lean_basal_metabolic_rate(weight)
+    rhb = revised_harris_benedict_lean_basal_metabolic_rate(weight)
+    kma = katch_mcardle_lean_basal_metabolic_rate(lbm_boer)
+    print('\nDaily Basal Metabolic Rate Estimates:')
+    print(f'Mifflin St Jeor: {int(msj)}')
+    print(f'Revised Harris Benedict: {int(rhb)}')
+    print(f'Katch McArdle: {int(kma)}')
 
 
 def performance(resting_heart_rate):
+    print('\nPerformance:')
     print(f'Resting heart rate: {resting_heart_rate}')
     print(f'Maximum heart rate: {MAXIMUM_HEART_RATE}')
     for zone in ZONE_DICT.keys():
@@ -134,9 +162,11 @@ def performance(resting_heart_rate):
 if __name__ == "__main__":
 
     try:
-        resting_heart_rate = int(sys.argv[1])
+        weight = int(sys.argv[1])
+        resting_heart_rate = int(sys.argv[2])
     except IndexError:
-        resting_heart_rate = 48
+        print(f'Usage: {sys.argv[0]} <weight> <resting-heart-rate>')
+        sys.exit(1)
 
-    body()
+    body(weight)
     performance(resting_heart_rate)
