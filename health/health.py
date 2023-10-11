@@ -33,8 +33,6 @@ WAIST = 108
 NECK = 47
 HIP = 0
 
-AGE = 51
-
 # tanaka equation
 MAXIMUM_HEART_RATE = 208 - (0.7 * AGE)
 
@@ -52,7 +50,7 @@ ZONE_DICT = {
     'Zone 3': (0.7, 0.8, 'Aerobic,   50/50% fat/carb, plateau=bad'),
     'Zone 4': (0.8, 0.9, 'Anaerobic, 15/85% fat/carb feel burn, lactic acid, heavy weights, 30-45 mins'),
     'Zone 5': (0.9, 1.0, 'Crazy red line, 45-60 seconds, interval'),
-    }
+}
 
 
 def float_to_percent(lower, upper):
@@ -76,7 +74,7 @@ def us_navy_body_fat_calc():
         Men: BF = 495 / ( 1.0324 - 0.19077 * log10( waist - neck ) + 0.15456 * log10( height ) ) - 450
         Women: BF = 495 / ( 1.29579 - 0.35004 * log10( waist + hip - neck ) + 0.22100 * log10( height ) ) - 450
     """
-    return 495 / ( 1.0324 - 0.19077 * log10( WAIST - NECK ) + 0.15456 * log10( HEIGHT ) ) - 450
+    return 495 / (1.0324 - 0.19077 * log10(WAIST - NECK) + 0.15456 * log10(HEIGHT)) - 450
 
 
 def lean_body_mass(weight):
@@ -95,8 +93,8 @@ def boer_formula_lean_body_mass_estimate(weight):
 
 def mifflin_st_jeor_lean_basal_metabolic_rate(weight):
     """
-    The Mifflin-St. Jeor calculator (or equation) calculates your 
-    basal metabolic rate (BMR), and its results are based on an 
+    The Mifflin-St. Jeor calculator (or equation) calculates your
+    basal metabolic rate (BMR), and its results are based on an
     estimated average. Basal metabolic rate is the amount of energy expended
     per day at rest (how many calories you would burn on bed rest).
 
@@ -109,7 +107,7 @@ def mifflin_st_jeor_lean_basal_metabolic_rate(weight):
 
 def revised_harris_benedict_lean_basal_metabolic_rate(weight):
     """
-    Basal metabolic rate (BMR), and its results are based on an 
+    Basal metabolic rate (BMR), and its results are based on an
     estimated average. Basal metabolic rate is the amount of energy expended
     per day at rest (how many calories you would burn on bed rest).
 
@@ -123,7 +121,7 @@ def revised_harris_benedict_lean_basal_metabolic_rate(weight):
 
 def katch_mcardle_lean_basal_metabolic_rate(lbm):
     """
-    Basal metabolic rate (BMR), and its results are based on an 
+    Basal metabolic rate (BMR), and its results are based on an
     estimated average. Basal metabolic rate is the amount of energy expended
     per day at rest (how many calories you would burn on bed rest).
 
