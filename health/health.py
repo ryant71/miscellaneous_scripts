@@ -22,6 +22,31 @@ MAXIMUM_HEART_RATE = 220 - AGE
 
 tanaka equation
 MAXIMUM_HEART_RATE = 208 - (0.7 * AGE)
+
+1.  Zone 1 - Very Light (50-60% of MHR):
+    This zone is ideal for warm-ups and cool-downs.
+    Benefits include improved circulation, recovery, and fat burning.
+    You can maintain a conversation easily in this zone.
+
+2.  Zone 2 - Light (60-70% of MHR):
+    This zone is often referred to as the "fat-burning zone."
+    It helps increase your aerobic capacity and endurance.
+    You can still talk comfortably in this zone.
+
+3.  Zone 3 - Moderate (70-80% of MHR):
+    This is the "aerobic zone" where you'll build cardiovascular fitness.
+    You may still talk, but it becomes more challenging.
+    You start burning more carbohydrates for fuel.
+
+4.  Zone 4 - Hard (80-90% of MHR):
+    This is the "anaerobic zone" where you work close to your maximum capacity.
+    You'll improve anaerobic endurance, lactate threshold, and speed.
+    Talking is difficult in this zone.
+
+5.  Zone 5 - Maximum (90-100% of MHR):
+    This is your maximum effort, where you work at your peak intensity.
+    It's used for short bursts of high-intensity training.
+    Talking is almost impossible in this zone.
 """
 
 import sys
@@ -42,13 +67,14 @@ RESTING_HEART_RATE = 49
 # putting this here, but this will be calculated in karvonen function
 HEART_RATE_RESERVE = MAXIMUM_HEART_RATE - RESTING_HEART_RATE
 
-
 ZONE_DICT = {
     'Zone 0': (0.4, 0.5, 'Easy'),
     'Zone 1': (0.5, 0.6, 'Warm-up, recovery'),
-    'Zone 2': (0.6, 0.7, 'Moderate,  85/15% fat/carb, light run 30 minutes, normal conversation'),
+    'Zone 2': (0.6, 0.7, 'Moderate,  85/15% fat/carb, light run 30 minutes, '
+                         'normal conversation'),
     'Zone 3': (0.7, 0.8, 'Aerobic,   50/50% fat/carb, plateau=bad'),
-    'Zone 4': (0.8, 0.9, 'Anaerobic, 15/85% fat/carb feel burn, lactic acid, heavy weights, 30-45 mins'),
+    'Zone 4': (0.8, 0.9, 'Anaerobic, 15/85% fat/carb feel burn, lactic acid, '
+                         'heavy weights, 30-45 mins'),
     'Zone 5': (0.9, 1.0, 'Crazy red line, 45-60 seconds, interval'),
 }
 
