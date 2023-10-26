@@ -25,27 +25,18 @@ def get_time_in_timezones(timezones):
         localized_time = current_time.astimezone(tz)
 
         # Get TZ offset
-        current_offset = tz.utcoffset(current_time).total_seconds() / 60 / 60
+        current_offset = tz.utcoffset(current_time).total_seconds() / 60 / 60 or ""
 
         # Check if DST is in effect at the current time
         is_dst = tz.dst(current_time) != timedelta(0)
 
         # Calculate the DST offset
-        dst_offset = (tz.dst(current_time).seconds if is_dst else timedelta(0).seconds) / 60 / 60
+        dst_offset = tz.dst(current_time).seconds / 60 / 60 if is_dst else ""
 
         if dst_offset:
-            # next transition is this year
-            next_transition = [t for t in tz._utc_transition_times if t.year == current_time.year and t > current_time]
-            if not next_transition:
-                # next transition is next year
-                next_transition = [t for t in tz._utc_transition_times if (t.year == current_time.year + 1)]
+            next_transition = [t_time for t_time in tz._utc_transition_times if t_time > current_time][0].strftime('%Y.%m.%d')
         else:
-            next_transition = None
-
-        if next_transition:
-            next_transition = next_transition[0].strftime('%Y.%m.%d')
-        else:
-            next_transition = ''
+            next_transition = ""
 
         print(f"{tz_name.split('/')[1]:14}{localized_time.strftime('%H:%M (%a)'):13}{current_offset:>6}{dst_offset:>5}{next_transition:>13}")
 
