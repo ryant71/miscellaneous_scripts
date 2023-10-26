@@ -47,6 +47,34 @@ MAXIMUM_HEART_RATE = 208 - (0.7 * AGE)
     This is your maximum effort, where you work at your peak intensity.
     It's used for short bursts of high-intensity training.
     Talking is almost impossible in this zone.
+
+
+The FFMI calculator uses currently approved mathematical formulas for computing the fat-free mass, FFMI as well as normalized FFMI. The latter is dedicated for taller athletes who are bigger overall.
+
+Body fat calculation based on the simple equation:
+
+body fat = weight [kg] × (body fat [%] / 100).
+
+It is expressed in kilograms [kg].
+
+Fat-free mass is estimated using the following method:
+
+fat free mass = weight [kg] × (1 - (body fat [%]/ 100)).
+
+Result is also expressed in kilograms [kg].
+
+FFMI is calculated respectively:
+
+FFMI = fat free mass [kg]/ (height [m])².
+
+Expressed in kilograms per square meter [kg/m²].
+
+For normalized FFMI use the equation:
+
+normalized FFMI = FFMI [kg/m²] + 6.1 × (1.8 - height [m]).
+
+The same unit as in FFMI [kg/m²].
+
 """
 
 import sys
