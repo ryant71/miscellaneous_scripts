@@ -21,29 +21,18 @@ timezones = [
 
 def next_change_value(current_offset, next_transition_datetime, hemisphere):
     mid = datetime(next_transition_datetime.year, 7, 2, 0, 0, 0)
+    negate = 1 if hemisphere == 'south' else -1
 
-    if hemisphere == 'south':
-        if current_offset >= 0:
-            if next_transition_datetime > mid:  # -> summer
-                return 1
-            if next_transition_datetime < mid:  # -> winter
-                return -1
-        else:
-            if next_transition_datetime > mid:  # -> summer
-                return 1
-            if next_transition_datetime < mid:  # -> winter
-                return -1
-    if hemisphere == 'north':
-        if current_offset >= 0:
-            if next_transition_datetime > mid:  # -> summer
-                return -1
-            if next_transition_datetime < mid:  # -> winter
-                return 1
-        else:
-            if next_transition_datetime > mid:  # -> summer
-                return -1
-            if next_transition_datetime < mid:  # -> winter
-                return 1
+    if current_offset >= 0:
+        if next_transition_datetime > mid:  # -> summer
+            return 1 * negate
+        if next_transition_datetime < mid:  # -> winter
+            return -1 * negate
+    else:
+        if next_transition_datetime > mid:  # -> summer
+            return 1 * negate
+        if next_transition_datetime < mid:  # -> winter
+            return -1 * negate
 
 
 def get_time_in_timezones(timezones, override_date=None):
